@@ -1,0 +1,74 @@
+Login
+-----
+Flow
+----
+	1. User Sends the credentials 
+	2. Credentials will be get converted into several filterChains
+	3. It will be handled to Authentication Manager
+	4. Authentication Manager will handle it over to the Authentication Provider
+	5. Authentication Provider 
+		1. Extracts the UserDetails(data) from DB
+			-> Using loadUserByUsername() method in UserDetailsService
+		2. Encode the user inputted raw password
+			-> Using BCryptPasswordEncoder
+			
+	6. Authentication Provider check both encoded pwd and the retived pwd are same
+	7. If same authentication object will be created
+	8. Then it will be stored in Security Context
+	9. For subsequent request it will check the Security Context
+	10. If it is found in it steps 3-8 will be skipped and directly login
+		-> cuz spring security is statefull as it stores session
+		
+
+Steps
+-----
+	-> Create a method in the Repository to retrive the data based on the user credentials
+		public User findByEmail(String email);
+		
+	-> In Service Class Implement the User Details Service and override the 
+	load user by username method
+		public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+
+			Customer c = customerRepo.findByEmail(email);
+			return new User(c.getEmail(), c.getPwd(), Collections.emptyList());
+		}
+		
+Note: UserDetailsService is used to invoke the service logic automatically when a user passes credentials
+	Then the loadUserByUsername method is used to fetch the data from DB and to convert the entity object into Authentication User object for authentication
+	
+	
+		
+	-> In configuration class Create a "Authentication Manager" object
+		AuthenticationManager authManager(AuthenticationConfiguration config) throws Exception {
+			return config.getAuthenticationManager();
+		}
+		
+	-> In configuration class Create a "Authentication Provider" Object
+		AuthenticationProvider authProvider() {
+
+			DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+
+			authProvider.setUserDetailsService(customerService);
+			authProvider.setPasswordEncoder(pwdEncoder());
+
+			return authProvider;
+		}
+	
+	-> Create a post mapping with login end point 
+		1. Convert the credentials into UsernamePasswordAuthenticationToken
+			UsernamePasswordAuthenticationToken token = new UsernamePasswordAuthenticationToken(customer.getEmail(),
+				customer.getPwd());
+		2. pass that token to the authManager to authenticate
+			authManager.authenticate(token);
+		3. It returns a Authentication object
+			Authentication authenticate = authManager.authenticate(token);
+		4. Check if it is authenticated
+			-> If yes allow			
+				if (authenticate.isAuthenticated()) {
+					return new ResponseEntity<>("Welcome", HttpStatus.OK);
+				}
+		
+			-> else dont allow
+				return new ResponseEntity<>("Invalid Credentials", HttpStatus.BAD_REQUEST);
+				
+	-> Allow the endpoints by customizing the SecurityFilerChain

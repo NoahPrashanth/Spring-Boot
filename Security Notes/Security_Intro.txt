@@ -1,0 +1,27 @@
+Spring Security
+---------------
+	-> Used for securing api
+	-> Add dependancy
+		-> By default it secures all Endpoints
+		-> To login
+			1. user - Console generated password
+			2. In .properties file
+				-> spring.security.user.name
+				-> spring.security.user.password
+			3. InMemoryUserDetailsManager object
+				UserDetails u = User.withDefaultPasswordEncoder()
+				.username("Noah")
+				.password("Noah@123")
+				.build();		
+				new InMemoryUserDetailsManager(u);
+	-> Customize the public endpoints as bean
+		SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+			http.csrf(csrf -> csrf.disable())
+					.authorizeHttpRequests(req -> req
+							.requestMatchers("/register").permitAll()
+							.anyRequest().authenticated())
+					.httpBasic(Customizer.withDefaults());;
+			return http.build();
+		}
+	-> Annotate the configuration class with "@EnableWebSecurity"	
+	

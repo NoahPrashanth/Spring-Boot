@@ -1,0 +1,156 @@
+JWT
+---
+	-> Json Web Token
+	-> It consists of 3 parts
+		1. Header - contains Algorithm and token type
+		2. Payload - contains user data
+		3. signature - contains
+	-> If we use without JWT it will be Statefull
+	-> With JWT it is stateless
+	-> Eliminates the need if storing the data in security context
+	-> Instead it creates a token and send it back
+	-> For every subsequent request the user will send the token in Header
+	
+FLOW
+----
+	-> Once the authentication is successfull
+	-> Jwt token is created using JWt utility class
+	-> Then it sends back to the user
+	-> For subsequent request the user will send the token in the "Authorization" header
+	-> In header it will be sent as bearer token
+		Eg: Authorization: Bearer <sd9lkh4sd7i>
+	-> That requests after authentication will be validated by "OncePerRequestFilter"
+	-> If the token is valid the authorization is Succesfull
+	-> else it will be forbidden
+	
+	
+Steps
+-----
+	-> Create a JWT Utility class in service for token creation
+	
+@Component
+public class JwtUtil {
+	
+	public static final String SECRET_KEY = "au832hcagf482039rjfq9uf0r439t87fhsdiucw9843948hrfeufh84785374ytiufdsier9387r9hoif9325ytjlkxm";
+	
+	public String generateToken(String username, String role) {
+        return Jwts.builder()
+                .setSubject(username)
+                .claim("role", role)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60))
+                .signWith(SignatureAlgorithm.HS256, SECRET_KEY)
+                .compact();
+    }
+
+    public Claims extractClaims(String token) {
+        return Jwts.parserBuilder().setSigningKey(SECRET_KEY).build()
+                .parseClaimsJws(token).getBody();
+    }
+
+    public String extractUsername(String token) {
+        return extractClaims(token).getSubject();
+    }
+
+    public String extractRole(String token) {
+        return (String) extractClaims(token).get("role");
+    }
+
+}
+	
+
+	-> The token validation logic should be common for all requests so create a filter which extends "OncePerRequestFilter"
+	
+	
+@Component
+public class JwtFilter extends OncePerRequestFilter {
+
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    @Autowired
+    private EmpRepository repo;
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
+                                    FilterChain chain) throws IOException, ServletException {
+        String authHeader = request.getHeader("Authorization");
+        
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+        	
+            String jwt = authHeader.substring(7);
+            String username = jwtUtil.extractUsername(jwt);
+            String role = jwtUtil.extractRole(jwt);
+
+            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            	Employee emp = repo.findByEmail(username).get();
+                UserDetails user = User.builder()
+                        .username(username)
+                        .password(emp.getPwd())
+                        .roles(role.replace("ROLE_", ""))
+                        .build();
+
+                UsernamePasswordAuthenticationToken authToken =
+                        new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
+
+                SecurityContextHolder.getContext().setAuthentication(authToken);
+            }
+        }
+        chain.doFilter(request, response);
+    }
+}
+
+
+	-> Customize the endpoints in "SecurityFilterChain" for Authorization("Role Based Access Control") in configuration class
+	
+	
+@Bean
+SecurityFilterChain custm(HttpSecurity http) throws Exception {
+	http.csrf(c -> c.disable())
+		.authorizeHttpRequests(req -> req
+				.requestMatchers("/api/register", "/api/login").permitAll()
+				.requestMatchers("/api/admin").hasRole("ADMIN")
+	            .requestMatchers("/api/user").hasAnyRole("USER", "ADMIN")
+				.anyRequest().authenticated())
+		.httpBasic(Customizer.withDefaults())
+		.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+		
+	return http.build();
+}
+
+
+	-> In the login endpoint if the authenticated() returns true then create token
+	
+	
+	@PostMapping("/login")
+	public ResponseEntity<String> signUp(@RequestBody Employee e){
+		
+		try {
+			UsernamePasswordAuthenticationToken token = new UsernamePasswordAuthenticationToken(e.getEmail(), e.getPwd());
+			Authentication authenticate = am.authenticate(token);
+			if(authenticate.isAuthenticated()){
+				Employee emp = repo.findByEmail(e.getEmail()).get();
+				String jwt = jwtUtil.generateToken(e.getEmail(), emp.getRole());
+	            return ResponseEntity.ok(jwt);
+			}
+		}
+		catch(AuthenticationException ee) {
+			
+		}
+				
+		return new ResponseEntity<>("Wrong credentials", HttpStatus.BAD_REQUEST);
+	}
+	
+	
+	
+In Postman after calling the "/api/login" endpoint 
+	1. A jwt token will be generated
+	2. Copy that token
+	3. Select Authorization
+	4. Select Bearer Token
+	5. Paste that token
+	6. Click Send
+	
+	
+Others:
+	-> We can also use @PreAuthorize("hasRole('role')") annotations

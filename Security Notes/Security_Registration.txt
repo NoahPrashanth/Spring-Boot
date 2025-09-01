@@ -1,0 +1,34 @@
+Registration
+------------
+Flow
+----
+	1. User Sends the PayLoad
+	2. We recieve it in the controller
+	3. We save it in DB by encrypting the password
+	
+Steps
+-----
+	-> Create a Spring Boot Project with
+		1. Spring Web
+		2. JPA
+		3. MySQL Driver
+		4. DevTools
+		5. Lombok
+		6. Spring Security
+	-> Create a User entity with id, name, email, password
+	-> Make id as primary key and auto increment
+	-> Create a Repository for it
+	-> Create a Post request with and endpoint "/register" in controller
+	-> Get the input from Request Body
+	-> Pass it to Service
+	-> In Service
+		save it, but before it
+	-> In configuration class create a bean for password encryption
+		PasswordEncoder pwdEncode() {
+			return new BCryptPasswordEncoder();
+		}
+Note: BCryptPasswordEncoder is used to encrypt the password of the user
+	
+	-> Now save it in service by encrypting the user's password
+		String encrpted = encoder.encode(req.getPwd());
+		req.setPwd(encrpted);
